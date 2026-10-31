@@ -16,7 +16,7 @@ export default function StaffPage() {
       body: JSON.stringify(Object.fromEntries(new FormData(form))),
     });
     const json = await res.json();
-    setMsg(res.ok ? { ok: true, text: `Staff account created for ${json.email}` } : { ok: false, text: json.error });
+    setMsg(res.ok ? { ok: true, text: `Staff account created for ${json.data.email}` } : { ok: false, text: json.error?.message });
     if (res.ok) form.reset();
     setBusy(false);
   }

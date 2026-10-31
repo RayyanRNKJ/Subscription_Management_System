@@ -47,20 +47,20 @@ export async function parseBody<T extends z.ZodType>(request: Request, schema: T
   return schema.safeParse(body);
 }
 
-type RoleHandler = (request: Request, profile: Profile) => Promise<Response> | Response;
+type RoleHandler = (request: Request, profile: Profile, context?: unknown) => Promise<Response> | Response;
 
 /**
  * Applies the common authentication and role gate to mutating route handlers.
  * Database RLS remains the second authorization boundary for the operation itself.
  */
 export function withRole(roles: Role[], handler: RoleHandler) {
-  return async (request: Request) => {
+  return async (request: Request, context?: unknown) => {
     const profile = await getProfile();
     if (!profile) return fail("UNAUTHENTICATED", "Sign in to continue.", 401);
     if (!roles.includes(profile.role)) return fail("FORBIDDEN", "You do not have permission for this action.", 403);
 
     try {
-      return await handler(request, profile);
+      return await handler(request, profile, context);
     } catch (error) {
       console.error("Unhandled API error", error);
       return fail("INTERNAL", "Something went wrong. Please try again.", 500);

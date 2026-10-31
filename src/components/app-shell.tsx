@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, ReceiptIndianRupee, Users } from "lucide-react";
+import { BarChart3, LayoutDashboard, Package, ReceiptIndianRupee, Users } from "lucide-react";
 import type { Profile } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
 
 const teamNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/products", label: "Products", icon: Package },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/subscriptions", label: "Subscriptions", icon: BarChart3 },
   { href: "/invoices", label: "Invoices", icon: ReceiptIndianRupee },
