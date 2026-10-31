@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile, homeFor } from "@/lib/auth";
 import { forgotSchema, loginSchema, resetSchema, signUpSchema } from "@/lib/validation";
 
 export type FormState = { error?: string; message?: string };
@@ -28,7 +29,9 @@ export async function signIn(_: FormState, formData: FormData): Promise<FormStat
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) return { error: "Invalid email or password" };
-  redirect("/");
+  const profile = await getProfile();
+  if (!profile) return { error: "Your account profile could not be loaded. Please try again." };
+  redirect(homeFor(profile.role));
 }
 
 export async function signOut() {
