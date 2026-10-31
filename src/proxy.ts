@@ -1,11 +1,10 @@
 // Keeps the Supabase session fresh and sends signed-out users to /login.
-// Works on Next 15 and 16 (16 prefers the name proxy.ts but still runs middleware.ts).
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
