@@ -129,3 +129,7 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  body:has(.invoice-print-page) header { display: none !important; }
+}
