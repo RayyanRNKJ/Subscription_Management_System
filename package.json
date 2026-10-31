@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "node --env-file=.env.local --import=tsx scripts/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
