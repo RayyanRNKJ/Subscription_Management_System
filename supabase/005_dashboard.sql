@@ -79,6 +79,18 @@ mrr_total as (
     and (p_plan is null or s.plan_id = p_plan)
     and (p_customer is null or s.customer_id = p_customer)
 ),
+portal_subscription_totals as (
+  -- This result is intentionally populated only for the portal's single-customer call.
+  select s.id,
+         (coalesce(p.price, 0) + coalesce(sum(sl.quantity * sl.unit_price), 0))::numeric(14,2) as total
+  from public.subscriptions s
+  join public.plans p on p.id = s.plan_id
+  left join public.subscription_lines sl on sl.subscription_id = s.id
+  where p_customer is not null
+    and s.customer_id = p_customer
+    and (p_plan is null or s.plan_id = p_plan)
+  group by s.id, p.price
+),
 months as (
   select generate_series(
     date_trunc('month', current_date)::date - interval '5 months',
@@ -121,6 +133,10 @@ select jsonb_build_object(
   'overdue_count', (select overdue_count from invoice_totals),
   'overdue_amount', (select overdue_amount from invoice_totals),
   'mrr', (select amount from mrr_total),
+  'subscription_totals', coalesce((
+    select jsonb_agg(jsonb_build_object('id', id, 'total', total) order by id)
+    from portal_subscription_totals
+  ), '[]'::jsonb),
   'revenue_by_month', coalesce((
     select jsonb_agg(jsonb_build_object(
       'month', to_char(m.month, 'YYYY-MM'),

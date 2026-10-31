@@ -10,3 +10,4 @@
 - Invoice overdue and payment progress are derived from the invoice status, due date, and `invoice_balances` view at read time; no overdue flag is stored.
 - `record_payment` serializes writes on the invoice row before checking the current balance so concurrent manual payments cannot overpay it.
 - Dashboard charts use accessible native SVG over SQL-aggregated chart data. Recharts was requested but the package registry install stalled in this environment, so the dashboard stays buildable without adding an unresolved dependency.
+- The customer portal reads per-subscription recurring totals from the RLS-scoped `dashboard_summary` RPC; the total is never summed from line rows in application code.
