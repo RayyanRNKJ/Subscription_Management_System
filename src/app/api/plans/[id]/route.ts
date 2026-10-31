@@ -1,0 +1,6 @@
+import { createClient } from "@/lib/supabase/server";
+import { fail, ok, parseBody, validationError, withRole } from "@/lib/api";
+import { planSchema } from "@/lib/validation/plan";
+type Context = { params: Promise<{ id: string }> };
+export const PATCH = withRole(["admin"], async (request, _profile, context) => { const { id } = await (context as Context).params; const parsed = await parseBody(request, planSchema); if (!parsed.success) return validationError(parsed.error); const supabase = await createClient(); const { data, error } = await supabase.from("plans").update(parsed.data).eq("id", id).select("id").maybeSingle(); if (error) return fail("INTERNAL", error.message, 500); return data ? ok(data) : fail("NOT_FOUND", "Plan not found.", 404); });
+export const DELETE = withRole(["admin"], async (_request, _profile, context) => { const { id } = await (context as Context).params; const supabase = await createClient(); const { error } = await supabase.from("plans").delete().eq("id", id); return error ? fail(error.code === "23503" ? "CONFLICT" : "INTERNAL", error.code === "23503" ? "This plan is referenced and cannot be deleted." : error.message, error.code === "23503" ? 409 : 500) : ok({ id }); });

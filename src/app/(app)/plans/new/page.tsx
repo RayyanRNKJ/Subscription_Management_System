@@ -1,0 +1,2 @@
+import { PlanForm } from "@/components/plan-form"; import { requireRole } from "@/lib/auth"; import { createClient } from "@/lib/supabase/server";
+export default async function NewPlanPage() { await requireRole("admin"); const supabase = await createClient(); const { data } = await supabase.from("taxes").select("id,name,rate").order("name"); return <PlanForm taxes={(data ?? []) as { id: string; name: string; rate: number }[]} />; }
