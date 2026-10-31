@@ -45,6 +45,13 @@ async function main() {
   if (dueError) throw new Error("Could not check for unrelated due subscriptions.");
   const unrelatedDue = (dueRows ?? []).filter((row) => !row.expiry_date || row.next_billing_date <= row.expiry_date).length;
   assert(unrelatedDue === 0, "Run this script in a clean billing test database with no unrelated due active subscriptions.");
+  const { data: autoCloseSubs, error: autoCloseError } = await supabase.from("subscriptions").select("id,expiry_date,plans(auto_close,available_to)").eq("status", "active");
+  if (autoCloseError) throw new Error("Could not check for unrelated auto-close work.");
+  const unrelatedAutoClose = (autoCloseSubs ?? []).some((row) => {
+    const planData = Array.isArray(row.plans) ? row.plans[0] : row.plans;
+    return Boolean(planData?.auto_close && ((row.expiry_date && row.expiry_date < today) || (planData.available_to && planData.available_to < today)));
+  });
+  assert(!unrelatedAutoClose, "Run this script in a clean billing test database without unrelated auto-close subscriptions.");
 
   const ids: string[] = [];
   let mainSubscriptionId: string | undefined;
@@ -112,7 +119,38 @@ async function main() {
       assert((count ?? 0) === 0, `${label} subscription was billed.`);
     }
 
-    console.log("Billing integration passed: idempotency, three periods, GST rounding, and paused/non-active/expired exclusions.");
+    // A draft rejects payment. Confirming drafts unlocks partial payment; a full
+    // final payment changes the invoice to paid, and overpayment is rejected.
+    const draftInvoice = invoices[0];
+    const draftPayment = await supabase.rpc("record_payment", {
+      p_invoice_id: draftInvoice.id, p_method: "upi", p_amount: 1, p_paid_on: today, p_note: null, p_user: customer.id,
+    });
+    assert(draftPayment.error?.message.includes("INVOICE_NOT_PAYABLE"), "Payment on a draft invoice must be rejected.");
+
+    const { data: confirmedCount, error: confirmError } = await supabase.rpc("confirm_drafts", { p_subscription_ids: [mainSubscriptionId] });
+    if (confirmError) throw new Error(`Could not confirm test invoices: ${confirmError.message}`);
+    assert(confirmedCount === 3, `Expected three draft invoices confirmed, received ${confirmedCount}.`);
+
+    const total = Number(draftInvoice.total);
+    const partial = Math.min(1, total / 2);
+    const partialResult = await supabase.rpc("record_payment", {
+      p_invoice_id: draftInvoice.id, p_method: "upi", p_amount: partial, p_paid_on: today, p_note: "billing integration test", p_user: customer.id,
+    });
+    if (partialResult.error) throw new Error(`Partial payment failed: ${partialResult.error.message}`);
+    assert(partialResult.data.invoice_status === "confirmed" && Number(partialResult.data.balance) > 0, "Partial payment must leave the invoice confirmed with a balance.");
+
+    const overpayment = await supabase.rpc("record_payment", {
+      p_invoice_id: draftInvoice.id, p_method: "upi", p_amount: Number(partialResult.data.balance) + 0.01, p_paid_on: today, p_note: null, p_user: customer.id,
+    });
+    assert(overpayment.error?.message.includes("OVERPAYMENT"), "Overpayment must be rejected.");
+
+    const fullResult = await supabase.rpc("record_payment", {
+      p_invoice_id: draftInvoice.id, p_method: "bank_transfer", p_amount: Number(partialResult.data.balance), p_paid_on: today, p_note: "settled", p_user: customer.id,
+    });
+    if (fullResult.error) throw new Error(`Final payment failed: ${fullResult.error.message}`);
+    assert(fullResult.data.invoice_status === "paid" && Number(fullResult.data.balance) === 0, "Full payment must mark the invoice paid with zero balance.");
+
+    console.log("Billing integration passed: billing idempotency, three periods, GST rounding, inactive/expired exclusions, and payment lifecycle.");
   } finally {
     if (ids.length) {
       await supabase.from("payments").delete().in("invoice_id", (await supabase.from("invoices").select("id").in("subscription_id", ids)).data?.map((row) => row.id) ?? []);

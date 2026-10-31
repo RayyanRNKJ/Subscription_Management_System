@@ -267,7 +267,71 @@ begin
 end;
 $$;
 
+create or replace function public.record_payment(
+  p_invoice_id uuid,
+  p_method text,
+  p_amount numeric,
+  p_paid_on date,
+  p_note text,
+  p_user uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice public.invoices%rowtype;
+  v_payment public.payments%rowtype;
+  v_paid numeric(12,2);
+  v_balance numeric(12,2);
+  v_new_status public.inv_status;
+begin
+  select * into v_invoice
+    from public.invoices
+   where id = p_invoice_id
+   for update;
+  if not found then raise exception 'INVOICE_NOT_FOUND' using errcode = 'P0001'; end if;
+  if v_invoice.status <> 'confirmed' then
+    raise exception 'INVOICE_NOT_PAYABLE' using errcode = 'P0001';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'OVERPAYMENT' using errcode = 'P0001';
+  end if;
+  if p_method not in ('cash', 'bank_transfer', 'card', 'upi', 'cheque') then
+    raise exception 'INVALID_PAYMENT_METHOD' using errcode = 'P0001';
+  end if;
+
+  select coalesce(sum(amount), 0)
+    into v_paid
+    from public.payments
+   where invoice_id = p_invoice_id;
+  v_balance := coalesce(v_invoice.total, 0) - v_paid;
+  if p_amount > v_balance then
+    raise exception 'OVERPAYMENT' using errcode = 'P0001';
+  end if;
+
+  insert into public.payments (invoice_id, method, amount, paid_on, note, created_by)
+  values (p_invoice_id, p_method, p_amount, p_paid_on, p_note, p_user)
+  returning * into v_payment;
+
+  v_balance := v_balance - p_amount;
+  v_new_status := case when v_balance = 0 then 'paid'::public.inv_status else 'confirmed'::public.inv_status end;
+  if v_new_status = 'paid' then
+    update public.invoices set status = 'paid' where id = p_invoice_id;
+  end if;
+
+  return jsonb_build_object(
+    'payment', to_jsonb(v_payment),
+    'invoice_status', v_new_status,
+    'balance', v_balance
+  );
+end;
+$$;
+
 revoke execute on function public.run_billing(date) from public, anon, authenticated;
 grant execute on function public.run_billing(date) to service_role;
 revoke execute on function public.confirm_drafts(uuid[]) from public, anon, authenticated;
 grant execute on function public.confirm_drafts(uuid[]) to service_role;
+revoke execute on function public.record_payment(uuid, text, numeric, date, text, uuid) from public, anon, authenticated;
+grant execute on function public.record_payment(uuid, text, numeric, date, text, uuid) to service_role;
