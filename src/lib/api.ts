@@ -21,6 +21,10 @@ export function ok<T>(data: T, init: ResponseInit = {}) {
   return NextResponse.json({ data }, init);
 }
 
+export function okList<T>(data: T, page: number, pageSize: number, total: number) {
+  return NextResponse.json({ data, page, pageSize, total });
+}
+
 /** Return the API's consistent error response envelope. */
 export function fail(
   code: ApiErrorCode,
