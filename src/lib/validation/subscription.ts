@@ -4,7 +4,7 @@ export const subscriptionLineSchema = z.object({
   product_id: z.string().uuid(),
   variant_id: z.string().uuid().nullable().optional(),
   quantity: z.coerce.number().int().min(1),
-  unit_price: z.coerce.number().min(0),
+  unit_price: z.coerce.number().min(0).optional(),
   tax_id: z.string().uuid().nullable().optional(),
 });
 
@@ -18,9 +18,6 @@ export const subscriptionSchema = z.object({
 }).superRefine((value, context) => {
   if (value.expiry_date && value.expiry_date < value.start_date) {
     context.addIssue({ code: "custom", path: ["expiry_date"], message: "Expiry date must be on or after start date." });
-  }
-  if (!Number.isFinite(value.lines.reduce((sum, line) => sum + line.quantity, 0))) {
-    context.addIssue({ code: "custom", path: ["lines"], message: "Line quantities are invalid." });
   }
 });
 
